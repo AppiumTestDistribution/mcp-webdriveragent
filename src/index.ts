@@ -297,9 +297,7 @@ class WebDriverAgentServer {
           type: 'text',
           text: JSON.stringify(
             {
-              message: `Account type set to: ${
-                args.isFreeAccount ? 'Free Account' : 'Enterprise Account'
-              }`,
+              message: `Please select the account type: Free Account or Enterprise Account`,
               instructions:
                 "call the tool 'build_and_sign_wda' with the selected profile and account type",
             },
@@ -349,7 +347,9 @@ class WebDriverAgentServer {
       allowHttp: false,
       addEntitlements: undefined,
       bundleIdKeychainGroup: false,
-      bundleid: profile.bundleId?.replace(/^\s+|\s+$/g, ''),
+      bundleid: isFreeAccount
+        ? profile.bundleId?.replace(/^\s+|\s+$/g, '')
+        : '',
       cloneEntitlements: false,
       customKeychainGroup: undefined,
       debug: '',
