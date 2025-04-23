@@ -1,5 +1,5 @@
 {
-  "name": "wda-mcp",
+  "name": "mcp-webdriveragent",
   "version": "1.0.0",
   "description": "MCP server for WebDriverAgent build and signing",
   "main": "build/index.js",
