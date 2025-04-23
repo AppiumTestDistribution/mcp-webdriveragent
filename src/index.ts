@@ -397,20 +397,8 @@ class WebDriverAgentServer {
           type: 'text',
           text: JSON.stringify(
             {
-              status: 'success',
               message: 'WebDriverAgent successfully built and signed',
-              ipaPath: ipaPath,
               resignedIpaPath: `${wdaBuildPath}/Payload-resigned.ipa`,
-              wdaProjectPath: resolvedWdaPath,
-              provisioningProfile: {
-                value: profile.value,
-                name: profile.name,
-                bundleId: profile.bundleId,
-                filePath: profile.filePath,
-              },
-              accountType: isFreeAccount
-                ? 'Free Account'
-                : 'Enterprise Account',
             },
             null,
             2
