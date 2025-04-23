@@ -48,46 +48,40 @@ async function getProvisioningProfilePath(): Promise<string> {
   }
 }
 
-async function getMobileProvisioningFile(
-  mobileProvisioningFile?: string
-): Promise<string> {
-  if (mobileProvisioningFile) {
-    if (
-      !fs.existsSync(mobileProvisioningFile) ||
-      !fs.statSync(mobileProvisioningFile).isFile()
-    ) {
-      throw new Error(
-        `Mobile provisioning file ${mobileProvisioningFile} does not exist`
-      );
-    }
-    return mobileProvisioningFile;
-  } else {
-    const provisionFileDir = await getProvisioningProfilePath();
+async function getMobileProvisioningFile(): Promise<
+  { value: string; name: string; bundleId: string; filePath: string }[]
+> {
+  const provisionFileDir = await getProvisioningProfilePath();
 
-    if (!fs.existsSync(provisionFileDir)) {
-      throw new Error(
-        `Provisioning directory does not exist: ${provisionFileDir}`
-      );
-    }
-
-    const files = fs
-      .readdirSync(provisionFileDir, { encoding: 'utf8' })
-      .filter((file) => file.endsWith('.mobileprovision'));
-
-    const provisioningFiles = files.map((file) => {
-      const fullPath = path.join(provisionFileDir, file);
-      const mp = provision.readFromFile(fullPath);
-      return { ...mp, _filePath: fullPath };
-    });
-
-    if (!provisioningFiles || !provisioningFiles.length) {
-      throw new Error('No mobileprovision file found on the machine');
-    }
-
-    // Return the first provisioning profile for now
-    // In a real implementation, we would need to handle selection
-    return provisioningFiles[0]._filePath;
+  if (!fs.existsSync(provisionFileDir)) {
+    throw new Error(
+      `Provisioning directory does not exist: ${provisionFileDir}`
+    );
   }
+
+  const files = fs
+    .readdirSync(provisionFileDir, { encoding: 'utf8' })
+    .filter((file) => file.endsWith('.mobileprovision'));
+
+  const provisioningFiles = files.map((file) => {
+    const fullPath = path.join(provisionFileDir, file);
+    const mp = provision.readFromFile(fullPath);
+    return { ...mp, _filePath: fullPath };
+  });
+
+  if (!provisioningFiles || !provisioningFiles.length) {
+    throw new Error('No mobileprovision file found on the machine');
+  }
+
+  const choices = provisioningFiles.map((file) => ({
+    value: file.UUID,
+    name: `${file.Name.split(':')[1] || file.Name} (Team: ${file.TeamName}) (${
+      file.UUID
+    })`,
+    bundleId: file.Name.split(':')[1]?.trimStart(),
+    filePath: file._filePath,
+  }));
+  return choices;
 }
 
 async function getWdaProject(wdaProjectPath?: string): Promise<string> {
@@ -184,7 +178,7 @@ class WebDriverAgentServer {
               mobileProvisioningFile: {
                 type: 'string',
                 description:
-                  'Path to the mobile provisioning file which is used to sign the webdriver agent (optional)',
+                  'Show list of mobile provisioning files and ask user to select one to sign the webdriver agent',
               },
               wdaProjectPath: {
                 type: 'string',
@@ -201,7 +195,7 @@ class WebDriverAgentServer {
                   'Bundle ID to use for signing (required for free accounts)',
               },
             },
-            required: ['isFreeAccount'],
+            required: ['mobileProvisioningFile', 'isFreeAccount'],
           },
         },
       ],
@@ -219,9 +213,7 @@ class WebDriverAgentServer {
 
       try {
         // Step 1: Get the mobile provisioning file
-        const mobileProvisioningFile = await getMobileProvisioningFile(
-          args.mobileProvisioningFile
-        );
+        const mobileProvisioningFiles = await getMobileProvisioningFile();
 
         // Step 2: Find the WebDriverAgent project
         const wdaProjectPath = await getWdaProject(args.wdaProjectPath);
@@ -276,7 +268,7 @@ class WebDriverAgentServer {
           keychain: undefined,
           lipoArch: undefined,
           massageEntitlements: false,
-          mobileprovision: mobileProvisioningFile,
+          mobileprovision: mobileProvisioningFiles,
           noEntitlementsFile: undefined,
           noclean: false,
           osversion: undefined,
