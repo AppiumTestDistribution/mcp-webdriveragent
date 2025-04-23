@@ -84,19 +84,7 @@ async function getMobileProvisioningFile(): Promise<
   return choices;
 }
 
-async function getWdaProject(wdaProjectPath?: string): Promise<string> {
-  if (wdaProjectPath) {
-    if (
-      !fs.existsSync(wdaProjectPath) ||
-      !fs.statSync(wdaProjectPath).isDirectory()
-    ) {
-      throw new Error(
-        `Unable to find webdriver agent project in path ${wdaProjectPath}`
-      );
-    }
-    return wdaProjectPath;
-  }
-
+async function getWdaProject(): Promise<string> {
   try {
     return BOOTSTRAP_PATH;
   } catch (err) {
@@ -140,8 +128,21 @@ async function zipPayloadDirectory(
   });
 }
 
+// Store selected provisioning profile and account type
+interface SessionState {
+  selectedProvisioningProfile?: {
+    value: string;
+    name: string;
+    bundleId: string;
+    filePath: string;
+  };
+  isFreeAccount?: boolean;
+  wdaProjectPath?: string;
+}
+
 class WebDriverAgentServer {
   private server: Server;
+  private sessionState: SessionState = {};
 
   constructor() {
     this.server = new Server(
@@ -170,147 +171,82 @@ class WebDriverAgentServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
-          name: 'build_and_sign_wda',
-          description: 'Build and sign WebDriverAgent for iOS',
+          name: 'list_provisioning_profiles',
+          description: `List all provisioning profiles in the system.
+           Ask user to select from one of the listed profiles.
+           Don't assume or select any profile without asking the user.
+           Use the UUID of the selected profile to check the account type in next tool 'is_free_account'.
+           `,
           inputSchema: {
             type: 'object',
             properties: {
-              mobileProvisioningFile: {
+              profileUuid: {
                 type: 'string',
-                description:
-                  'Show list of mobile provisioning files and ask user to select one to sign the webdriver agent',
+                description: 'UUID of the selected provisioning profile',
               },
-              wdaProjectPath: {
-                type: 'string',
-                description: 'Path to webdriver agent xcode project (optional)',
+            },
+            required: ['profileUuid'],
+          },
+        },
+        {
+          name: 'is_free_account',
+          description: `Ask user to confirm if the selected provisioning profile is a free account or an enterprise account.
+           Don't assume the account type based on the UUID without asking the user.
+           `,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              isFreeAccount: {
+                type: 'boolean',
+                description:
+                  'check whether the profile selected from tool list_provisioning_profiles is a free account provisioning profile (true) or an enterprise account (false)',
+              },
+            },
+            required: ['isFreeAccount'],
+          },
+        },
+        {
+          name: 'build_and_sign_wda',
+          description:
+            'Build and sign WebDriverAgent for iOS using the selected provisioning profile',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              selectedProvisioningProfile: {
+                type: 'object',
+                description:
+                  'Selected provisioning profile from the tool list_provisioning_profiles that includes the UUID, name, bundleId and filePath',
               },
               isFreeAccount: {
                 type: 'boolean',
                 description:
-                  'Whether this is a free account provisioning profile. 1. Free Account 2. Enterprise Account',
-              },
-              bundleId: {
-                type: 'string',
-                description:
-                  'Bundle ID to use for signing (required for free accounts)',
+                  'Whether this is a free account provisioning profile (true) or an enterprise account (false)',
               },
             },
-            required: ['mobileProvisioningFile', 'isFreeAccount'],
+            required: ['selectedProvisioningProfile', 'isFreeAccount'],
           },
         },
       ],
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      if (request.params.name !== 'build_and_sign_wda') {
-        throw new McpError(
-          ErrorCode.MethodNotFound,
-          `Unknown tool: ${request.params.name}`
-        );
-      }
-
+      const toolName = request.params.name;
       const args = request.params.arguments as any;
 
       try {
-        // Step 1: Get the mobile provisioning file
-        const mobileProvisioningFiles = await getMobileProvisioningFile();
-
-        // Step 2: Find the WebDriverAgent project
-        const wdaProjectPath = await getWdaProject(args.wdaProjectPath);
-
-        // Step 3: Build WebDriverAgent
-        const wdaAppPath = await buildWebDriverAgent(wdaProjectPath);
-
-        // Step 4: Prepare WebDriverAgent IPA
-        const wdaBuildPath = path.join(wdaProjectPath, WDA_BUILD_PATH);
-        const payloadDirectory = path.join(wdaBuildPath, 'Payload');
-
-        // Remove framework directory
-        fs.readdirSync(`${wdaAppPath}/Frameworks`).forEach((f) =>
-          fs.rmSync(`${wdaAppPath}/Frameworks/${f}`, { recursive: true })
-        );
-
-        // Create Payload directory
-        await execAsync(`mkdir -p ${payloadDirectory}`);
-
-        // Move .app file to Payload directory
-        await execAsync(`mv ${wdaAppPath} ${payloadDirectory}`);
-
-        // Pack Payload directory
-        await zipPayloadDirectory(
-          `${wdaBuildPath}/Payload.ipa`,
-          payloadDirectory
-        );
-
-        // Step 5: Sign WebDriverAgent IPA
-        const ipaPath = `${wdaBuildPath}/Payload.ipa`;
-
-        let appleOptions: any;
-        appleOptions = {
-          all: false,
-          allDirs: false,
-          allowHttp: false,
-          addEntitlements: undefined,
-          bundleIdKeychainGroup: false,
-          bundleId: args.bundleId.replace(/^\s+|\s+$/g, ''),
-          cloneEntitlements: false,
-          customKeychainGroup: undefined,
-          debug: '',
-          deviceProvision: false,
-          entitlement: undefined,
-          entry: false,
-          file: ipaPath,
-          forceFamily: false,
-          identity: undefined,
-          ignoreZipErrors: false,
-          insertLibrary: undefined,
-          json: undefined,
-          keychain: undefined,
-          lipoArch: undefined,
-          massageEntitlements: false,
-          mobileprovision: mobileProvisioningFiles,
-          noEntitlementsFile: undefined,
-          noclean: false,
-          osversion: undefined,
-          outfile: '',
-          parallel: false,
-          pseudoSign: false,
-          replaceipa: false,
-          run: undefined,
-          selfSignedProvision: false,
-          single: false,
-          unfairPlay: false,
-          use7zip: false,
-          useOpenSSL: undefined,
-          verify: false,
-          verifyTwice: false,
-          withGetTaskAllow: true,
-          withoutPlugins: true,
-          withoutSigningFiles: false,
-          withoutWatchapp: false,
-          withoutXCTests: false,
-        };
-
-        const as = new Applesign(appleOptions);
-        await as.signIPA(ipaPath);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  status: 'success',
-                  message: 'WebDriverAgent successfully built and signed',
-                  ipaPath: ipaPath,
-                  wdaProjectPath: wdaProjectPath,
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
+        switch (toolName) {
+          case 'list_provisioning_profiles':
+            return await this.handleListProvisioningProfiles();
+          case 'is_free_account':
+            return await this.isFreeAccount(args);
+          case 'build_and_sign_wda':
+            return await this.handleBuildAndSignWda(args);
+          default:
+            throw new McpError(
+              ErrorCode.MethodNotFound,
+              `Unknown tool: ${toolName}`
+            );
+        }
       } catch (error) {
         return {
           content: [
@@ -323,6 +259,165 @@ class WebDriverAgentServer {
         };
       }
     });
+  }
+
+  private async handleListProvisioningProfiles() {
+    // Get all provisioning profiles
+    const provisioningProfiles = await getMobileProvisioningFile();
+
+    // Clear any previously selected profile
+    this.sessionState.selectedProvisioningProfile = undefined;
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              message: 'Please select a provisioning profile',
+              profiles: provisioningProfiles,
+              instructions:
+                "Use the 'is_free_account' tool with the selected profile UUID to ask user to confirm the account type is free or enterprise",
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  private async isFreeAccount(args: any) {
+    // Store the account type
+    this.sessionState.isFreeAccount = args.isFreeAccount;
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              message: `Account type set to: ${
+                args.isFreeAccount ? 'Free Account' : 'Enterprise Account'
+              }`,
+              instructions:
+                "call the tool 'build_and_sign_wda' with the selected profile and account type",
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  private async handleBuildAndSignWda(args: any) {
+    // Get the profile UUID and account type from the arguments
+    const profile = args.selectedProvisioningProfile;
+    const isFreeAccount = args.isFreeAccount;
+
+    // Step 1: Find the WebDriverAgent project
+    const resolvedWdaPath = await getWdaProject();
+
+    // Step 2: Build WebDriverAgent
+    const wdaAppPath = await buildWebDriverAgent(resolvedWdaPath);
+
+    // Step 3: Prepare WebDriverAgent IPA
+    const wdaBuildPath = path.join(resolvedWdaPath, WDA_BUILD_PATH);
+    const payloadDirectory = path.join(wdaBuildPath, 'Payload');
+
+    // Remove framework directory
+    fs.readdirSync(`${wdaAppPath}/Frameworks`).forEach((f) =>
+      fs.rmSync(`${wdaAppPath}/Frameworks/${f}`, { recursive: true })
+    );
+
+    // Create Payload directory
+    await execAsync(`mkdir -p ${payloadDirectory}`);
+
+    // Move .app file to Payload directory
+    await execAsync(`mv ${wdaAppPath} ${payloadDirectory}`);
+
+    // Pack Payload directory
+    await zipPayloadDirectory(`${wdaBuildPath}/Payload.ipa`, payloadDirectory);
+
+    // Step 4: Sign WebDriverAgent IPA
+    const ipaPath = `${wdaBuildPath}/Payload.ipa`;
+
+    let appleOptions: any = {
+      all: false,
+      allDirs: false,
+      allowHttp: false,
+      addEntitlements: undefined,
+      bundleIdKeychainGroup: false,
+      bundleid: profile.bundleId?.replace(/^\s+|\s+$/g, ''),
+      cloneEntitlements: false,
+      customKeychainGroup: undefined,
+      debug: '',
+      deviceProvision: false,
+      entitlement: undefined,
+      entry: false,
+      file: ipaPath,
+      forceFamily: false,
+      identity: undefined,
+      ignoreZipErrors: false,
+      insertLibrary: undefined,
+      json: undefined,
+      keychain: undefined,
+      lipoArch: undefined,
+      massageEntitlements: false,
+      mobileprovision: profile.filePath,
+      noEntitlementsFile: undefined,
+      noclean: false,
+      osversion: undefined,
+      outfile: '',
+      parallel: false,
+      pseudoSign: false,
+      replaceipa: false,
+      run: undefined,
+      selfSignedProvision: false,
+      single: false,
+      unfairPlay: false,
+      use7zip: false,
+      useOpenSSL: undefined,
+      verify: false,
+      verifyTwice: false,
+      withGetTaskAllow: true,
+      withoutPlugins: true,
+      withoutSigningFiles: false,
+      withoutWatchapp: false,
+      withoutXCTests: false,
+    };
+
+    const as = new Applesign(appleOptions);
+    await as.signIPA(ipaPath);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              status: 'success',
+              message: 'WebDriverAgent successfully built and signed',
+              ipaPath: ipaPath,
+              resignedIpaPath: `${wdaBuildPath}/Payload-resigned.ipa`,
+              wdaProjectPath: resolvedWdaPath,
+              provisioningProfile: {
+                value: profile.value,
+                name: profile.name,
+                bundleId: profile.bundleId,
+                filePath: profile.filePath,
+              },
+              accountType: isFreeAccount
+                ? 'Free Account'
+                : 'Enterprise Account',
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
   }
 
   async run() {
