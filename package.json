@@ -1,8 +1,7 @@
 {
   "name": "mcp-webdriveragent",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "MCP server for WebDriverAgent build and signing",
-  "type": "module",
   "bin": {
     "mcp-webdriveragent": "build/index.js"
   },

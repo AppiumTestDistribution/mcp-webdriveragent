@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { WebDriverAgentServer } from './wda.js';
+import { WebDriverAgentServer } from './wda';
 
 // For backward compatibility
 export const createServer = async () => {
