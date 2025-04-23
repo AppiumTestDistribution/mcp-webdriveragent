@@ -1,12 +1,12 @@
 {
   "name": "mcp-webdriveragent",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "MCP server for WebDriverAgent build and signing",
   "bin": {
     "mcp-webdriveragent": "build/index.js"
   },
   "files": [
-    "dist"
+    "build"
   ],
   "scripts": {
     "build": "rimraf build && tsc && chmod +x build/index.js",
