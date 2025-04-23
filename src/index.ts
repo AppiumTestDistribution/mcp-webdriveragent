@@ -15,6 +15,9 @@ import Applesign from 'applesign';
 import archiver from 'archiver';
 import os from 'os';
 import { provision } from 'ios-mobileprovision-finder';
+import { resolve } from 'path';
+
+import { BOOTSTRAP_PATH } from 'appium-webdriveragent';
 
 const execAsync = util.promisify(exec);
 const WDA_BUILD_PATH = '/appium_wda_ios/Build/Products/Debug-iphoneos';
@@ -101,11 +104,9 @@ async function getWdaProject(wdaProjectPath?: string): Promise<string> {
   }
 
   try {
-    const { stdout } = await execAsync(
-      'find $HOME/.appium -name WebDriverAgent.xcodeproj'
-    );
-    return stdout;
+    return BOOTSTRAP_PATH;
   } catch (err) {
+    console.error('Error finding WebDriverAgent project:', err);
     throw new Error('Unable to find WebDriverAgent project');
   }
 }
@@ -192,7 +193,7 @@ class WebDriverAgentServer {
               isFreeAccount: {
                 type: 'boolean',
                 description:
-                  'Whether this is a free account provisioning profile',
+                  'Whether this is a free account provisioning profile. 1. Free Account 2. Enterprise Account',
               },
               bundleId: {
                 type: 'string',
@@ -245,32 +246,61 @@ class WebDriverAgentServer {
 
         // Pack Payload directory
         await zipPayloadDirectory(
-          `${wdaBuildPath}/wda-resign.zip`,
+          `${wdaBuildPath}/Payload.ipa`,
           payloadDirectory
         );
 
         // Step 5: Sign WebDriverAgent IPA
-        const ipaPath = `${wdaBuildPath}/wda-resign.ipa`;
+        const ipaPath = `${wdaBuildPath}/Payload.ipa`;
 
         let appleOptions: any;
-        if (args.isFreeAccount) {
-          if (!args.bundleId) {
-            throw new Error('Bundle ID is required for free accounts');
-          }
-          appleOptions = {
-            mobileprovision: mobileProvisioningFile,
-            outfile: ipaPath,
-            bundleId: args.bundleId.replace(/^\s+|\s+$/g, ''),
-          };
-        } else {
-          appleOptions = {
-            mobileprovision: mobileProvisioningFile,
-            outfile: ipaPath,
-          };
-        }
+        appleOptions = {
+          all: false,
+          allDirs: false,
+          allowHttp: false,
+          addEntitlements: undefined,
+          bundleIdKeychainGroup: false,
+          bundleId: args.bundleId.replace(/^\s+|\s+$/g, ''),
+          cloneEntitlements: false,
+          customKeychainGroup: undefined,
+          debug: '',
+          deviceProvision: false,
+          entitlement: undefined,
+          entry: false,
+          file: ipaPath,
+          forceFamily: false,
+          identity: undefined,
+          ignoreZipErrors: false,
+          insertLibrary: undefined,
+          json: undefined,
+          keychain: undefined,
+          lipoArch: undefined,
+          massageEntitlements: false,
+          mobileprovision: mobileProvisioningFile,
+          noEntitlementsFile: undefined,
+          noclean: false,
+          osversion: undefined,
+          outfile: '',
+          parallel: false,
+          pseudoSign: false,
+          replaceipa: false,
+          run: undefined,
+          selfSignedProvision: false,
+          single: false,
+          unfairPlay: false,
+          use7zip: false,
+          useOpenSSL: undefined,
+          verify: false,
+          verifyTwice: false,
+          withGetTaskAllow: true,
+          withoutPlugins: true,
+          withoutSigningFiles: false,
+          withoutWatchapp: false,
+          withoutXCTests: false,
+        };
 
         const as = new Applesign(appleOptions);
-        await as.signIPA(path.join(wdaBuildPath, 'wda-resign.zip'));
+        await as.signIPA(ipaPath);
 
         return {
           content: [
