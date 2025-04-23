@@ -1,6 +1,6 @@
 {
   "name": "mcp-webdriveragent",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MCP server for WebDriverAgent build and signing",
   "type": "module",
   "bin": {
@@ -12,7 +12,8 @@
   "scripts": {
     "build": "rimraf build && tsc && chmod +x build/index.js",
     "start": "node build/index.js",
-    "dev": "tsc -w"
+    "dev": "tsc -w",
+    "prepublish": "npm run build"
   },
   "keywords": [
     "mcp",
