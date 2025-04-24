@@ -41,49 +41,97 @@ To use this MCP server with Claude, you need to add it to your MCP settings conf
 
 - For Cursor: `/Users/[username]/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
 - For Claude Desktop: `/Users/[username]/Library/Application Support/Claude/claude_desktop_config.json`
+- For Cline or other MCP clients: Check your client's documentation for the configuration file location
 
 Add the following configuration to the `mcpServers` object in the settings file:
 
 ```json
 {
   "mcpServers": {
-    "wda-mcp-server": {
-      "command": "node",
-      "args": ["/path/to/wda-mcp/build/index.js"],
-      "env": {},
-      "disabled": false,
-      "autoApprove": []
+    "mcp-wda": {
+      "command": "npx",
+      "args": ["mcp-webdriveragent"],
+      "autoApprove": [],
+      "timeout": 300
     }
   }
 }
 ```
 
-Replace `/path/to/wda-mcp` with the actual path to this project.
+This configuration uses `npx` to run the globally or locally installed `mcp-webdriveragent` package.
 
 ## Available Tools
 
-### build_and_sign_wda
+The server provides a workflow of tools that should be used in sequence:
 
-This tool builds and signs WebDriverAgent for iOS.
+### 1. list_provisioning_profiles
+
+Lists all iOS provisioning profiles available on the system.
 
 **Parameters:**
 
-- `mobileProvisioningFile` (optional): Path to the mobile provisioning file which is used to sign the webdriver agent
-- `wdaProjectPath` (optional): Path to webdriver agent xcode project
-- `isFreeAccount` (required): Whether this is a free account provisioning profile
-- `bundleId` (required for free accounts): Bundle ID to use for signing
+- `profileUuid` (required): UUID of the selected provisioning profile
 
 **Example Usage:**
 
 ```javascript
 <use_mcp_tool>
-<server_name>wda-mcp-server</server_name>
+<server_name>mcp-wda</server_name>
+<tool_name>list_provisioning_profiles</tool_name>
+<arguments>
+{
+  "profileUuid": "00000000-0000-0000-0000-000000000000"
+}
+</arguments>
+</use_mcp_tool>
+```
+
+### 2. is_free_account
+
+Confirms if the selected provisioning profile is from a free or enterprise account.
+
+**Parameters:**
+
+- `isFreeAccount` (required): Boolean indicating if the profile is from a free account (true) or enterprise account (false)
+
+**Example Usage:**
+
+```javascript
+<use_mcp_tool>
+<server_name>mcp-wda</server_name>
+<tool_name>is_free_account</tool_name>
+<arguments>
+{
+  "isFreeAccount": true
+}
+</arguments>
+</use_mcp_tool>
+```
+
+### 3. build_and_sign_wda
+
+Builds and signs WebDriverAgent for iOS using the selected provisioning profile.
+
+**Parameters:**
+
+- `selectedProvisioningProfile` (required): Object containing the selected profile details (UUID, name, bundleId, filePath)
+- `isFreeAccount` (required): Boolean indicating if the profile is from a free account (true) or enterprise account (false)
+
+**Example Usage:**
+
+```javascript
+<use_mcp_tool>
+<server_name>mcp-wda</server_name>
 <tool_name>build_and_sign_wda</tool_name>
 <arguments>
 {
-  "isFreeAccount": true,
-  "bundleId": "com.example.WebDriverAgentRunner",
-  "wdaProjectPath": "/path/to/WebDriverAgent"
+  "selectedProvisioningProfile": {
+    "value": "00000000-0000-0000-0000-000000000000",
+    "name": "iOS Team Provisioning Profile: com.example.WebDriverAgentRunner",
+    "bundleId": "com.example.WebDriverAgentRunner",
+    "filePath": "/Users/username/Library/MobileDevice/Provisioning Profiles/profile.mobileprovision"
+  },
+  "isFreeAccount": true
 }
 </arguments>
 </use_mcp_tool>
@@ -94,6 +142,7 @@ This tool builds and signs WebDriverAgent for iOS.
 - macOS with Xcode installed
 - Node.js 14 or higher
 - Valid iOS provisioning profile for signing
+- Appium WebDriverAgent dependencies (installed automatically)
 
 ## Development
 
@@ -105,4 +154,4 @@ npm run dev
 
 ## License
 
-ISC
+MIT
