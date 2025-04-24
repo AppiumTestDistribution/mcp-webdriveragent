@@ -1,5 +1,13 @@
 # WebDriverAgent MCP Server
 
+<h1 align="center">
+	<br>
+	<img src="assests/mcp-wdalogo.png" alt="MCP_WDA">
+	<br>
+	<br>
+	<br>
+</h1>
+
 This is a Model Context Protocol (MCP) server that provides tools for building and signing WebDriverAgent for iOS.
 
 ## Overview
