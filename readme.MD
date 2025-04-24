@@ -2,7 +2,7 @@
 
 <h1 align="center">
 	<br>
-	<img src="assets/mcp-wdalogo.png" alt="MCP_WDA">
+	<img src="assets/mcp-wdalogo.png" alt="MCP_WDA" width="50%" style="max-width: 300px;">
 	<br>
 	<br>
 	<br>
